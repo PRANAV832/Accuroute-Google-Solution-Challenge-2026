@@ -1,5 +1,7 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
+import '../services/session.dart';
 import '../utils/app_theme.dart';
 import '../utils/constants.dart';
 
@@ -58,17 +60,34 @@ class _SignupScreenState extends State<SignupScreen>
     final email = _emailController.text.trim();
     final password = _passwordController.text.trim();
 
-    final success = await _authService.signup(email, password);
+    try {
+      await _authService.signup(email, password);
 
-    if (!mounted) return;
-    setState(() => _isLoading = false);
+      if (!mounted) return;
+      setState(() => _isLoading = false);
 
-    if (success) {
+      // Set company session
+      Session().role = UserRole.company;
       Navigator.of(context).pushReplacementNamed(AppConstants.dashboardRoute);
-    } else {
+    } on FirebaseAuthException catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: const Text('Signup failed. Please try again.'),
+          content: Text(AuthService.friendlyError(e)),
+          backgroundColor: AppTheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(8),
+          ),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isLoading = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Signup failed: ${e.toString()}'),
           backgroundColor: AppTheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(

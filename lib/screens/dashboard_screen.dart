@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import '../models/shipment.dart';
-import '../services/shipment_service.dart';
+import '../services/auth_service.dart';
+import '../services/session.dart';
+import '../services/firestore_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/constants.dart';
 import '../widgets/shipment_card.dart';
@@ -13,10 +15,7 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  final ShipmentService _service = ShipmentService();
-  List<Shipment> _allShipments = [];
-  List<Shipment> _filteredShipments = [];
-  bool _isLoading = true;
+  final FirestoreService _firestoreService = FirestoreService();
 
   final _searchController = TextEditingController();
   String _selectedRiskFilter = 'All';
@@ -24,30 +23,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
   final List<String> _riskFilters = ['All', 'Low Risk', 'Medium Risk', 'High Risk'];
 
   @override
-  void initState() {
-    super.initState();
-    _loadShipments();
-  }
-
-  @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadShipments() async {
-    final shipments = await _service.getShipments();
-    if (mounted) {
-      setState(() {
-        _allShipments = shipments;
-        _isLoading = false;
-        _applyFilters();
-      });
-    }
-  }
+  List<Shipment> _applyFilters(List<Shipment> allShipments) {
+    List<Shipment> result = List.from(allShipments);
 
-  void _applyFilters() {
-    List<Shipment> result = List.from(_allShipments);
+    // If driver role, filter to only their assigned shipment
+    final session = Session();
+    if (session.isDriver) {
+      result = result
+          .where((s) =>
+              s.driverName.toLowerCase() ==
+                  (session.driverName ?? '').toLowerCase() &&
+              s.id.toUpperCase() ==
+                  (session.shipmentId ?? '').toUpperCase())
+          .toList();
+    }
 
     // Search filter
     final query = _searchController.text.trim().toLowerCase();
@@ -74,7 +68,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       }
     }
 
-    setState(() => _filteredShipments = result);
+    return result;
   }
 
   @override
@@ -100,7 +94,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           IconButton(icon: const Icon(Icons.notifications_none_rounded), onPressed: () {}),
           IconButton(
             icon: const Icon(Icons.logout_rounded),
-            onPressed: () => Navigator.of(context).pushReplacementNamed(AppConstants.loginRoute),
+            onPressed: () async {
+              await AuthService().logout();
+              Session().clear();
+              if (context.mounted) {
+                Navigator.of(context).pushReplacementNamed(AppConstants.roleSelectRoute);
+              }
+            },
           ),
         ],
         bottom: PreferredSize(
@@ -109,52 +109,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ),
       ),
 
-      // ── FAB: Add Shipment ────────────────────────────────────────
-      floatingActionButton: FloatingActionButton(
-        backgroundColor: AppTheme.primary,
-        foregroundColor: Colors.white,
-        onPressed: () async {
-          await Navigator.of(context).pushNamed(AppConstants.addShipmentRoute);
-          // Reload shipments after returning from add screen
-          _loadShipments();
-        },
-        child: const Icon(Icons.add),
-      ),
-
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator(color: AppTheme.primary))
-          : RefreshIndicator(
-              onRefresh: _loadShipments,
-              color: AppTheme.primary,
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  _buildSummaryHeader(),
-                  const SizedBox(height: 16),
-
-                  // ── Search + Filter bar ──────────────────────
-                  _buildSearchFilter(),
-                  const SizedBox(height: 16),
-
-                  const Row(children: [
-                    Icon(Icons.local_shipping_rounded, size: 18, color: AppTheme.textSecondary),
-                    SizedBox(width: 8),
-                    Text('Active Shipments',
-                        style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
-                  ]),
-                  const SizedBox(height: 12),
-
-                  if (_filteredShipments.isEmpty)
-                    _buildEmptyState()
-                  else
-                    ..._filteredShipments.map((shipment) => ShipmentCard(
-                          shipment: shipment,
-                          onViewDetails: () => Navigator.of(context)
-                              .pushNamed(AppConstants.shipmentDetailRoute, arguments: shipment),
-                        )),
-                ],
-              ),
+      // ── FAB: Add Shipment (hidden for drivers) ───────────────────
+      floatingActionButton: Session().isDriver
+          ? null
+          : FloatingActionButton(
+              backgroundColor: AppTheme.primary,
+              foregroundColor: Colors.white,
+              onPressed: () async {
+                await Navigator.of(context).pushNamed(AppConstants.addShipmentRoute);
+              },
+              child: const Icon(Icons.add),
             ),
+
+      body: StreamBuilder<List<Shipment>>(
+        stream: _firestoreService.getShipmentsStream(),
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+          }
+          if (snapshot.hasError) {
+            return Center(child: Text('Error loading shipments', style: TextStyle(color: AppTheme.error)));
+          }
+
+          final allShipments = snapshot.data ?? [];
+          final filteredShipments = _applyFilters(allShipments);
+
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              _buildSummaryHeader(allShipments),
+              const SizedBox(height: 16),
+
+              // ── Search + Filter bar (hidden for drivers) ──
+              if (!Session().isDriver) ...[
+                _buildSearchFilter(),
+                const SizedBox(height: 16),
+              ],
+
+              const Row(children: [
+                Icon(Icons.local_shipping_rounded, size: 18, color: AppTheme.textSecondary),
+                SizedBox(width: 8),
+                Text('Active Shipments',
+                    style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600, color: AppTheme.textPrimary)),
+              ]),
+              const SizedBox(height: 12),
+
+              if (filteredShipments.isEmpty)
+                _buildEmptyState()
+              else
+                ...filteredShipments.map((shipment) => ShipmentCard(
+                      shipment: shipment,
+                      onViewDetails: () => Navigator.of(context)
+                          .pushNamed(AppConstants.shipmentDetailRoute, arguments: shipment),
+                    )),
+            ],
+          );
+        },
+      ),
     );
   }
 
@@ -174,7 +185,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           Expanded(
             child: TextField(
               controller: _searchController,
-              onChanged: (_) => _applyFilters(),
+              onChanged: (_) => setState(() {}),
               decoration: InputDecoration(
                 hintText: 'Search by Shipment ID',
                 prefixIcon: const Icon(Icons.search_rounded, size: 20, color: AppTheme.textMuted),
@@ -206,8 +217,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 items: _riskFilters.map((f) => DropdownMenuItem(value: f, child: Text(f))).toList(),
                 onChanged: (value) {
                   if (value != null) {
-                    _selectedRiskFilter = value;
-                    _applyFilters();
+                    setState(() {
+                      _selectedRiskFilter = value;
+                    });
                   }
                 },
               ),
@@ -241,9 +253,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   // ── Summary Header ─────────────────────────────────────────────
-  Widget _buildSummaryHeader() {
-    final total = _allShipments.length;
-    final atRisk = _allShipments.where((s) => s.risk == RiskLevel.high || s.risk == RiskLevel.medium).length;
+  Widget _buildSummaryHeader(List<Shipment> allShipments) {
+    final session = Session();
+    final source = session.isDriver ? _applyFilters(allShipments) : allShipments;
+    final total = source.length;
+    final atRisk = source.where((s) => s.risk == RiskLevel.high || s.risk == RiskLevel.medium).length;
     return Row(children: [
       Expanded(child: _tile('Total', '$total', Icons.inventory_2_rounded, AppTheme.primary)),
       const SizedBox(width: 12),

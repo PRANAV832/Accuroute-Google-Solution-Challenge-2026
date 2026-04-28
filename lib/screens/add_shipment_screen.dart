@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/shipment.dart';
-import '../services/shipment_service.dart';
+import '../services/firestore_service.dart';
+import '../services/maps_service.dart';
 import '../utils/app_theme.dart';
 
 /// Add Shipment screen — scrollable form to create a new shipment
@@ -13,7 +14,8 @@ class AddShipmentScreen extends StatefulWidget {
 
 class _AddShipmentScreenState extends State<AddShipmentScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _service = ShipmentService();
+  final _firestoreService = FirestoreService();
+  final _mapsService = MapsService();
   bool _isSubmitting = false;
 
   // Form controllers
@@ -46,12 +48,32 @@ class _AddShipmentScreenState extends State<AddShipmentScreen> {
 
     setState(() => _isSubmitting = true);
 
+    final source = _sourceController.text.trim();
+    final destination = _destinationController.text.trim();
+
+    // ── Fetch real ETA & distance from Google Directions API ────
+    String eta = 'N/A';
+    String distance = 'N/A';
+    try {
+      final routeData = await _mapsService.getRoute(source, destination, useCache: false);
+      if (routeData != null) {
+        // Prefer traffic-aware ETA when available
+        eta = routeData.durationInTrafficText.isNotEmpty
+            ? routeData.durationInTrafficText
+            : routeData.eta;
+        distance = routeData.distance;
+      }
+    } catch (e) {
+      // Route fetch failed — proceed with N/A values
+      print('Failed to fetch route for new shipment: $e');
+    }
+
     final shipment = Shipment(
       id: _idController.text.trim(),
-      source: _sourceController.text.trim(),
-      destination: _destinationController.text.trim(),
-      eta: 'N/A',
-      distance: 'N/A',
+      source: source,
+      destination: destination,
+      eta: eta,
+      distance: distance,
       risk: RiskLevel.low,
       vehicleType: _vehicleTypeController.text.trim(),
       vehicleNo: _vehicleNoController.text.trim(),
@@ -61,20 +83,32 @@ class _AddShipmentScreenState extends State<AddShipmentScreen> {
       company: _companyController.text.trim(),
     );
 
-    await _service.addShipment(shipment);
-
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Shipment added successfully!'),
-        backgroundColor: AppTheme.success,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      ),
-    );
-    Navigator.of(context).pop();
+    try {
+      await _firestoreService.addShipment(shipment);
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Shipment added successfully!'),
+          backgroundColor: AppTheme.success,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+      Navigator.of(context).pop();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmitting = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to add shipment: $e'),
+          backgroundColor: AppTheme.error,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
+    }
   }
 
   @override

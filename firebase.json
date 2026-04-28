@@ -1,0 +1,42 @@
+{
+  "hosting": {
+    "public": "build/web",
+    "ignore": [
+      "firebase.json",
+      "**/.*",
+      "**/node_modules/**"
+    ],
+    "rewrites": [
+      {
+        "source": "**",
+        "destination": "/index.html"
+      }
+    ]
+  },
+  "firestore": {
+    "rules": "firestore.rules"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "acuroute-34d34",
+          "appId": "1:848393432970:android:3088c0924955f2c11a2273",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "acuroute-34d34",
+          "configurations": {
+            "android": "1:848393432970:android:3088c0924955f2c11a2273",
+            "ios": "1:848393432970:ios:28644c33754ac6d31a2273",
+            "macos": "1:848393432970:ios:28644c33754ac6d31a2273",
+            "web": "1:848393432970:web:d030159605d6e7541a2273",
+            "windows": "1:848393432970:web:aa25dc820215f2f01a2273"
+          }
+        }
+      }
+    }
+  }
+}

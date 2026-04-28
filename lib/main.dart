@@ -1,19 +1,27 @@
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+import 'utils/env.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'models/shipment.dart';
 import 'screens/splash_screen.dart';
+import 'screens/role_select_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/signup_screen.dart';
+import 'screens/driver_login_screen.dart';
 import 'screens/dashboard_screen.dart';
 import 'screens/shipment_detail_screen.dart';
 import 'screens/add_shipment_screen.dart';
 import 'utils/app_theme.dart';
 import 'utils/constants.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Set system UI overlay style for a clean look
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
     statusBarColor: Colors.transparent,
     statusBarIconBrightness: Brightness.dark,
@@ -42,11 +50,17 @@ class AcuRouteApp extends StatelessWidget {
           case AppConstants.splashRoute:
             return _fadeRoute(const SplashScreen());
 
+          case AppConstants.roleSelectRoute:
+            return _fadeRoute(const RoleSelectScreen());
+
           case AppConstants.loginRoute:
             return _fadeRoute(const LoginScreen());
 
           case AppConstants.signupRoute:
             return _fadeRoute(const SignupScreen());
+
+          case AppConstants.driverLoginRoute:
+            return _fadeRoute(const DriverLoginScreen());
 
           case AppConstants.dashboardRoute:
             return _fadeRoute(const DashboardScreen());

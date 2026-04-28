@@ -1,27 +1,28 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import '../services/auth_service.dart';
+import '../models/shipment.dart';
 import '../services/session.dart';
+import '../services/firestore_service.dart';
 import '../utils/app_theme.dart';
 import '../utils/constants.dart';
 
-/// Login screen — clean centered card layout
-class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key});
+/// Driver login screen — validates against dummy shipment data
+/// On success, navigates directly to ShipmentDetailScreen (skips dashboard)
+class DriverLoginScreen extends StatefulWidget {
+  const DriverLoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  State<DriverLoginScreen> createState() => _DriverLoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
+class _DriverLoginScreenState extends State<DriverLoginScreen>
     with SingleTickerProviderStateMixin {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _driverNameController = TextEditingController();
+  final _shipmentIdController = TextEditingController();
+  final _phoneController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
-  final _authService = AuthService();
+  final _firestoreService = FirestoreService();
 
   bool _isLoading = false;
-  bool _obscurePassword = true;
 
   late AnimationController _animController;
   late Animation<double> _fadeAnim;
@@ -42,8 +43,9 @@ class _LoginScreenState extends State<LoginScreen>
 
   @override
   void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
+    _driverNameController.dispose();
+    _shipmentIdController.dispose();
+    _phoneController.dispose();
     _animController.dispose();
     super.dispose();
   }
@@ -53,37 +55,47 @@ class _LoginScreenState extends State<LoginScreen>
 
     setState(() => _isLoading = true);
 
-    final email = _emailController.text.trim();
-    final password = _passwordController.text.trim();
+    final driverName = _driverNameController.text.trim();
+    final shipmentId = _shipmentIdController.text.trim().toUpperCase();
+    final phone = _phoneController.text.trim();
 
-    try {
-      await _authService.login(email, password);
+    // Simulate network delay
+    await Future.delayed(const Duration(milliseconds: 600));
 
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+    // Validate against Firestore
+    final Shipment? shipment =
+        await _firestoreService.validateDriverLogin(driverName, shipmentId, phone);
 
-      // Set company session
-      Session().role = UserRole.company;
-      Navigator.of(context).pushReplacementNamed(AppConstants.dashboardRoute);
-    } on FirebaseAuthException catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(AuthService.friendlyError(e)),
-          backgroundColor: AppTheme.error,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
+    if (!mounted) return;
+    setState(() => _isLoading = false);
+
+    if (shipment != null) {
+      // Set session
+      final session = Session();
+      session.role = UserRole.driver;
+      session.driverName = driverName;
+      session.shipmentId = shipmentId;
+
+      // Navigate directly to shipment detail (skip dashboard)
+      Navigator.of(context).pushReplacementNamed(
+        AppConstants.dashboardRoute,
       );
-    } catch (e) {
-      if (!mounted) return;
-      setState(() => _isLoading = false);
+
+      // Push the shipment detail on top after a short delay
+      // so the dashboard is in the stack for back navigation
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted) {
+          Navigator.of(context).pushNamed(
+            AppConstants.shipmentDetailRoute,
+            arguments: shipment,
+          );
+        }
+      });
+    } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Login failed: ${e.toString()}'),
+          content: const Text(
+              'Invalid credentials. Check Driver Name, Shipment ID & Phone No.'),
           backgroundColor: AppTheme.error,
           behavior: SnackBarBehavior.floating,
           shape: RoundedRectangleBorder(
@@ -127,28 +139,32 @@ class _LoginScreenState extends State<LoginScreen>
                         height: 72,
                         decoration: BoxDecoration(
                           gradient: const LinearGradient(
-                            colors: [AppTheme.primary, AppTheme.primaryLight],
+                            colors: [
+                              Color(0xFF22C55E),
+                              Color(0xFF4ADE80),
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                           borderRadius: BorderRadius.circular(20),
                           boxShadow: [
                             BoxShadow(
-                              color: AppTheme.primary.withValues(alpha: 0.2),
+                              color: const Color(0xFF22C55E)
+                                  .withValues(alpha: 0.2),
                               blurRadius: 20,
                               offset: const Offset(0, 6),
                             ),
                           ],
                         ),
                         child: const Icon(
-                          Icons.route_rounded,
+                          Icons.local_shipping_rounded,
                           size: 36,
                           color: Colors.white,
                         ),
                       ),
                       const SizedBox(height: 20),
                       const Text(
-                        AppConstants.appName,
+                        'Driver Login',
                         style: TextStyle(
                           fontSize: 28,
                           fontWeight: FontWeight.w700,
@@ -158,7 +174,7 @@ class _LoginScreenState extends State<LoginScreen>
                       ),
                       const SizedBox(height: 4),
                       const Text(
-                        'Welcome back',
+                        'Access your assigned shipment',
                         style: TextStyle(
                           fontSize: 15,
                           color: AppTheme.textSecondary,
@@ -183,64 +199,68 @@ class _LoginScreenState extends State<LoginScreen>
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.stretch,
                               children: [
-                                // Email field
+                                // Driver Name field
                                 TextFormField(
-                                  controller: _emailController,
-                                  keyboardType: TextInputType.emailAddress,
+                                  controller: _driverNameController,
+                                  textCapitalization:
+                                      TextCapitalization.words,
                                   decoration: const InputDecoration(
-                                    labelText: 'Email',
-                                    hintText: 'you@example.com',
+                                    labelText: 'Driver Name',
+                                    hintText: 'e.g. Rajesh Kumar',
                                     prefixIcon: Icon(
-                                      Icons.email_outlined,
+                                      Icons.person_outline_rounded,
                                       size: 20,
                                       color: AppTheme.textMuted,
                                     ),
                                   ),
                                   validator: (v) {
                                     if (v == null || v.isEmpty) {
-                                      return 'Email is required';
-                                    }
-                                    if (!v.contains('@')) {
-                                      return 'Enter a valid email';
+                                      return 'Driver name is required';
                                     }
                                     return null;
                                   },
                                 ),
                                 const SizedBox(height: 14),
 
-                                // Password field
+                                // Shipment ID field
                                 TextFormField(
-                                  controller: _passwordController,
-                                  obscureText: _obscurePassword,
-                                  decoration: InputDecoration(
-                                    labelText: 'Password',
-                                    hintText: '••••••••',
-                                    prefixIcon: const Icon(
-                                      Icons.lock_outline,
+                                  controller: _shipmentIdController,
+                                  textCapitalization:
+                                      TextCapitalization.characters,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Shipment ID',
+                                    hintText: 'e.g. SHP-001',
+                                    prefixIcon: Icon(
+                                      Icons.tag_rounded,
                                       size: 20,
                                       color: AppTheme.textMuted,
-                                    ),
-                                    suffixIcon: IconButton(
-                                      icon: Icon(
-                                        _obscurePassword
-                                            ? Icons.visibility_off_outlined
-                                            : Icons.visibility_outlined,
-                                        size: 20,
-                                        color: AppTheme.textMuted,
-                                      ),
-                                      onPressed: () {
-                                        setState(() {
-                                          _obscurePassword = !_obscurePassword;
-                                        });
-                                      },
                                     ),
                                   ),
                                   validator: (v) {
                                     if (v == null || v.isEmpty) {
-                                      return 'Password is required';
+                                      return 'Shipment ID is required';
                                     }
-                                    if (v.length < 6) {
-                                      return 'Minimum 6 characters';
+                                    return null;
+                                  },
+                                ),
+                                const SizedBox(height: 14),
+
+                                // Phone field
+                                TextFormField(
+                                  controller: _phoneController,
+                                  keyboardType: TextInputType.phone,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Driver Phone No',
+                                    hintText: 'e.g. +91 9876543210',
+                                    prefixIcon: Icon(
+                                      Icons.phone_outlined,
+                                      size: 20,
+                                      color: AppTheme.textMuted,
+                                    ),
+                                  ),
+                                  validator: (v) {
+                                    if (v == null || v.isEmpty) {
+                                      return 'Phone number is required';
                                     }
                                     return null;
                                   },
@@ -252,6 +272,10 @@ class _LoginScreenState extends State<LoginScreen>
                                   height: 48,
                                   child: ElevatedButton(
                                     onPressed: _isLoading ? null : _submit,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor:
+                                          const Color(0xFF22C55E),
+                                    ),
                                     child: _isLoading
                                         ? const SizedBox(
                                             height: 20,
@@ -261,7 +285,7 @@ class _LoginScreenState extends State<LoginScreen>
                                               color: Colors.white,
                                             ),
                                           )
-                                        : const Text('Log In'),
+                                        : const Text('Log In as Driver'),
                                   ),
                                 ),
                               ],
@@ -272,31 +296,53 @@ class _LoginScreenState extends State<LoginScreen>
 
                       const SizedBox(height: 16),
 
-                      // ── Navigate to signup ───────────────────
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Text(
-                            "Don't have an account?",
-                            style: TextStyle(
-                              color: AppTheme.textSecondary,
-                              fontSize: 14,
-                            ),
+                      // ── Demo credentials hint ─────────────────
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF22C55E).withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color:
+                                const Color(0xFF22C55E).withValues(alpha: 0.15),
                           ),
-                          TextButton(
-                            onPressed: () {
-                              Navigator.of(context)
-                                  .pushReplacementNamed(AppConstants.signupRoute);
-                            },
-                            child: const Text(
-                              'Sign Up',
-                              style: TextStyle(
-                                fontWeight: FontWeight.w600,
-                                fontSize: 14,
+                        ),
+                        child: const Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(Icons.info_outline_rounded,
+                                size: 18, color: Color(0xFF22C55E)),
+                            SizedBox(width: 10),
+                            Expanded(
+                              child: Text(
+                                'Demo: Rajesh Kumar · SHP-001 · 9876543210',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  color: AppTheme.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
+                          ],
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+
+                      // ── Back to role select ───────────────────
+                      TextButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pushReplacementNamed(
+                              AppConstants.roleSelectRoute);
+                        },
+                        icon: const Icon(Icons.arrow_back_rounded, size: 18),
+                        label: const Text(
+                          'Back to Role Selection',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w500,
+                            fontSize: 14,
                           ),
-                        ],
+                        ),
                       ),
                     ],
                   ),

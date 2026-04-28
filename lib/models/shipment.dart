@@ -20,6 +20,8 @@ class Shipment {
   final String vehicleNo;
   final String goodsType;
   final String company;
+  final String driverPassword; // Demo-only field for driver login
+  final String? optimizedETA;
 
   const Shipment({
     required this.id,
@@ -36,6 +38,8 @@ class Shipment {
     this.vehicleNo = '',
     this.goodsType = '',
     this.company = '',
+    this.driverPassword = '',
+    this.optimizedETA,
   });
 
   /// Create a Shipment from JSON (ready for backend integration)
@@ -55,6 +59,8 @@ class Shipment {
       vehicleNo: json['vehicleNo'] as String? ?? '',
       goodsType: json['goodsType'] as String? ?? '',
       company: json['company'] as String? ?? '',
+      driverPassword: json['driverPassword'] as String? ?? '',
+      optimizedETA: json['optimizedETA'] as String?,
     );
   }
 
@@ -75,6 +81,8 @@ class Shipment {
       'vehicleNo': vehicleNo,
       'goodsType': goodsType,
       'company': company,
+      'driverPassword': driverPassword,
+      'optimizedETA': optimizedETA,
     };
   }
 
@@ -106,6 +114,8 @@ class Shipment {
     String? vehicleNo,
     String? goodsType,
     String? company,
+    String? driverPassword,
+    String? optimizedETA,
   }) {
     return Shipment(
       id: id ?? this.id,
@@ -122,6 +132,8 @@ class Shipment {
       vehicleNo: vehicleNo ?? this.vehicleNo,
       goodsType: goodsType ?? this.goodsType,
       company: company ?? this.company,
+      driverPassword: driverPassword ?? this.driverPassword,
+      optimizedETA: optimizedETA ?? this.optimizedETA,
     );
   }
 }

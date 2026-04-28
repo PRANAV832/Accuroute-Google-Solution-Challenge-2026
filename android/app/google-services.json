@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "848393432970",
+    "project_id": "acuroute-34d34",
+    "storage_bucket": "acuroute-34d34.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:848393432970:android:3088c0924955f2c11a2273",
+        "android_client_info": {
+          "package_name": "com.acuroute.acuroute"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCU2xmjt1y9wo3s9jMSEOjC0r51iSQ5ydQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

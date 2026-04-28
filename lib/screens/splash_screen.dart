@@ -53,10 +53,10 @@ class _SplashScreenState extends State<SplashScreen>
 
     _controller.forward();
 
-    // Navigate to login screen after splash duration
+    // Navigate to role selection screen after splash duration
     Future.delayed(AppConstants.splashDuration, () {
       if (mounted) {
-        Navigator.of(context).pushReplacementNamed(AppConstants.loginRoute);
+        Navigator.of(context).pushReplacementNamed(AppConstants.roleSelectRoute);
       }
     });
   }

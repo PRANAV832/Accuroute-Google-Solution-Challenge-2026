@@ -7,8 +7,10 @@ class AppConstants {
 
   // ─── Route Names ───────────────────────────────────────────────
   static const String splashRoute = '/';
+  static const String roleSelectRoute = '/role-select';
   static const String loginRoute = '/login';
   static const String signupRoute = '/signup';
+  static const String driverLoginRoute = '/driver-login';
   static const String dashboardRoute = '/dashboard';
   static const String shipmentDetailRoute = '/shipment-detail';
   static const String addShipmentRoute = '/add-shipment';
